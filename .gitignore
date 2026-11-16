@@ -1,0 +1,14 @@
+/target/
+Cargo.lock.bak
+*.pdb
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.iml
