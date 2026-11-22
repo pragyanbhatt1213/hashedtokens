@@ -1,27 +1,15 @@
 # HashedTokens
 
-A Rust HTTP client library that executes target API requests, captures the full exchange, and optionally stores it in an EDMS (External Data Management System) backend with WebSocket-based transaction tracking.
+HashedTokens is a Rust async HTTP client library that executes a target API request exactly once, captures the complete exchange (URL, method, headers, body, response), and asynchronously records it in an EDMS backend via `ops: "insert"`. Confirmation arrives over WebSocket (`DevApiResult` event), with an automatic `/jobs/:id` HTTP fallback if the socket disconnects.
 
-## Features
-
-- **HTTP request execution** — GET, POST, PUT, PATCH, and DELETE via a typed `HttpMethod` enum.
-- **Full exchange capture** — request URL, method, headers, and body are recorded alongside the response status, headers, and body.
-- **Optional EDMS integration** — when configured, every request's exchange is serialized and submitted to an EDMS collection endpoint.
-- **WebSocket transaction tracking** — the client opens a WebSocket connection before each EDMS-backed request and waits for a confirmed transaction result, with automatic recovery over HTTP if the socket disconnects mid-wait.
-- **All HTTP status codes preserved** — 4xx and 5xx responses from the target are not errors; they are captured and returned alongside the EDMS outcome.
-
-## Installation
-
-HashedTokens is not published to crates.io. Add it as a Git dependency:
+## Add to your project
 
 ```toml
 [dependencies]
-hashedtokens = { git = "https://github.com/your-org/hashedtokens" }
+hashedtokens = { git = "https://github.com/pragyanbhatt1213/hashedtokens" }
 ```
 
-## Quick Start
-
-Create a client and make a request without EDMS:
+## Usage without EDMS
 
 ```rust
 use hashedtokens::{HashedTokens, HttpMethod, RequestOptions};
@@ -41,18 +29,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-    println!("Status: {}", outcome.response.status_code());
-    if let Some(body) = outcome.response.json() {
-        println!("Body: {body}");
-    }
-
+    println!("{}", outcome.response.status_code());
     Ok(())
 }
 ```
 
-## EDMS Configuration
-
-When EDMS is configured, every call to `request()` captures the exchange and submits it to the EDMS backend. The WebSocket connection is opened before the target request and is used to confirm the transaction.
+## Usage with EDMS
 
 ```rust
 use hashedtokens::{
@@ -62,11 +44,10 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let edms = EdmsClientConfig::new("http://edms.example")
-        .timeout(Duration::from_secs(10));
-
     let client = HashedTokens::with_config(
-        ClientConfig::default().edms(edms),
+        ClientConfig::default().edms(
+            EdmsClientConfig::new("http://edms.example").timeout(Duration::from_secs(10)),
+        ),
     )?;
 
     let outcome = client
@@ -76,20 +57,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             RequestOptions::default()
                 .json(serde_json::json!({"item": "book"}))
                 .edms_collection("orders")
-                .edms_annotation("checkout-flow")
-                .edms_tags(vec!["production".to_owned()]),
+                .edms_annotation("checkout-flow"),
         )
         .await?;
 
-    println!("Target status: {}", outcome.response.status_code());
+    println!("target: {}", outcome.response.status_code());
 
     match outcome.edms {
-        EdmsOutcome::Stored(success) => {
-            println!("Stored. Transaction: {}", success.transaction_id);
-        }
-        EdmsOutcome::Failed(error) => {
-            eprintln!("EDMS storage failed: {error}");
-        }
+        EdmsOutcome::Stored(s) => println!("stored, tx: {}", s.transaction_id),
+        EdmsOutcome::Failed(e) => eprintln!("EDMS failed: {e}"),
         EdmsOutcome::Skipped => {}
     }
 
@@ -100,32 +76,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 `RequestOptions` EDMS fields:
 
 | Method | Purpose |
-|--------|---------|
+|---|---|
 | `.edms_collection("name")` | Required — the EDMS collection to insert into |
 | `.edms_annotation("note")` | Optional per-endpoint annotation |
 | `.edms_collection_annotation("note")` | Optional per-collection annotation |
-| `.edms_tags(vec![...])` | Optional endpoint-level tags |
-| `.edms_collection_tags(vec![...])` | Optional collection-level tags |
+| `.edms_tags(vec![…])` | Optional endpoint-level tags |
+| `.edms_collection_tags(vec![…])` | Optional collection-level tags |
 
-## Error Handling
+## Error model
 
 `request()` returns `Result<RequestOutcome, RequestError>`.
 
-**`Err(RequestError)`** means the call failed before a response was received:
-- Target transport errors (`Connection`, `RequestTimeout`, `Http`).
-- Invalid request parameters (`InvalidUrl`, `InvalidHeaderName`, `InvalidHeaderValue`, `InvalidTimeout`).
-- EDMS WebSocket connection failure before the target request (`EdmsConnection`).
-- Missing collection name when EDMS is configured (`EdmsCollectionRequired`).
+`Err` only when no response exists: transport error, bad URL, failed WebSocket connect, or missing collection name.
 
-**`Ok(RequestOutcome)`** is returned even on 4xx/5xx target responses. Inspect `outcome.response` for the target result and `outcome.edms` for the storage result:
+`Ok(RequestOutcome)` for every completed HTTP exchange, including 4xx and 5xx. Inspect `outcome.edms` for the storage result:
 
-- `EdmsOutcome::Skipped` — EDMS is not configured.
-- `EdmsOutcome::Stored(EdmsSuccess)` — the exchange was stored and the transaction confirmed.
-- `EdmsOutcome::Failed(EdmsError)` — the target call succeeded but EDMS storage failed. The target `ApiResponse` is still accessible on `outcome.response`. `EdmsError` has four variants: `Connection`, `Serialization`, `Submission`, and `Transaction`.
+- `EdmsOutcome::Skipped` — EDMS not configured.
+- `EdmsOutcome::Stored(EdmsSuccess)` — exchange stored and transaction confirmed.
+- `EdmsOutcome::Failed(EdmsError)` — target responded but EDMS failed. `EdmsError` has four variants: `Connection`, `Serialization`, `Submission`, `Transaction`.
 
-## Testing
+## Running tests
 
 ```sh
+# All mock-based tests (no external services required)
 cargo test
-cargo clippy --all-targets --all-features -- -D warnings
+
+# Live integration test against a running EDMS backend
+EDMS_BASE_URL=http://localhost:3000 cargo test --test live_edms_test -- --ignored --nocapture
+```
+
+PowerShell equivalent for the live test:
+
+```powershell
+$env:EDMS_BASE_URL="http://localhost:3000"
+cargo test --test live_edms_test -- --ignored --nocapture
 ```

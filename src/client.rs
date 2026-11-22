@@ -10,7 +10,6 @@ use reqwest::{
     Client,
     header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, USER_AGENT},
 };
-use std::time::Duration;
 
 pub struct HashedTokens {
     client: Client,
@@ -106,11 +105,7 @@ impl HashedTokens {
             url: url.to_owned(),
             reason: error.to_string(),
         })?;
-        let timeout = match (options.timeout, options.timeout_secs) {
-            (Some(timeout), _) => Some(timeout),
-            (None, Some(seconds)) => Some(Duration::from_secs(seconds)),
-            (None, None) => None,
-        };
+        let timeout = options.timeout;
         if timeout.is_some_and(|value| value.is_zero()) {
             return Err(RequestError::InvalidTimeout);
         }

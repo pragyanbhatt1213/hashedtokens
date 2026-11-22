@@ -9,8 +9,6 @@ pub enum HttpMethod {
     Delete,
 }
 
-pub type CrudType = HttpMethod;
-
 #[derive(Debug, Clone)]
 pub(crate) struct CapturedRequest {
     pub(crate) url: Url,

@@ -773,3 +773,39 @@ async fn edms_configured_without_collection_returns_err() {
 
     assert!(matches!(result, Err(RequestError::EdmsCollectionRequired)));
 }
+
+#[tokio::test]
+async fn binary_response_body_gives_serialization_failed_outcome() {
+    let target = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/blob"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/octet-stream")
+                .set_body_bytes(vec![0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]),
+        )
+        .mount(&target)
+        .await;
+
+    let edms = MockEdms::start().await;
+    let client = edms.client(Duration::from_secs(2));
+
+    let outcome = client
+        .request(
+            &format!("{}/blob", target.uri()),
+            HttpMethod::Get,
+            RequestOptions::default().edms_collection("blobs"),
+        )
+        .await
+        .expect("target succeeded; result must be Ok even when EDMS fails");
+
+    assert_eq!(outcome.response.status_code(), 200);
+    assert!(matches!(
+        outcome.response.body,
+        hashedtokens::ResponseBody::Binary(_)
+    ));
+    assert!(matches!(
+        outcome.edms,
+        EdmsOutcome::Failed(EdmsError::Serialization(_))
+    ));
+}

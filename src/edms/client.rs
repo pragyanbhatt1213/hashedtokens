@@ -10,10 +10,13 @@ use thiserror::Error;
 pub enum EdmsError {
     #[error("EDMS WebSocket connection failed: {0}")]
     Connection(Box<dyn std::error::Error + Send + Sync>),
+
     #[error("EDMS serialization failed: {0}")]
     Serialization(Box<dyn std::error::Error + Send + Sync>),
+
     #[error("EDMS insert submission failed: {0}")]
     Submission(Box<dyn std::error::Error + Send + Sync>),
+
     #[error("EDMS transaction failed: {0}")]
     Transaction(Box<dyn std::error::Error + Send + Sync>),
 }

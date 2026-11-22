@@ -13,8 +13,4 @@ pub use error::RequestError;
 pub use request::{Options, RequestOptions};
 pub use reqwest::{StatusCode, header};
 pub use response::{ApiResponse, EdmsOutcome, EdmsSuccess, RequestOutcome, ResponseBody};
-pub use types::{CrudType, HttpMethod};
-
-pub fn hello() -> &'static str {
-    "Hello from HashedTokens!"
-}
+pub use types::HttpMethod;

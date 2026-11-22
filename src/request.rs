@@ -7,7 +7,6 @@ pub struct RequestOptions {
     pub query: HashMap<String, String>,
     pub headers: HashMap<String, String>,
     pub timeout: Option<Duration>,
-    pub timeout_secs: Option<u64>,
     pub edms_collection: Option<String>,
     pub edms_annotation: Option<String>,
     pub edms_collection_annotation: Option<String>,
@@ -33,6 +32,11 @@ impl RequestOptions {
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn timeout_secs(mut self, secs: u64) -> Self {
+        self.timeout = Some(Duration::from_secs(secs));
         self
     }
 

@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Default)]
-pub struct CollectionConfig {
+pub(crate) struct CollectionConfig {
     pub(crate) name: String,
     pub(crate) annotation: Option<String>,
     pub(crate) collection_annotation: Option<String>,
@@ -17,7 +17,7 @@ pub struct CollectionConfig {
 }
 
 #[derive(Debug, Serialize)]
-pub struct InsertPayload {
+pub(crate) struct InsertPayload {
     ops: &'static str,
     endpoint_str: String,
     method: String,
@@ -48,7 +48,7 @@ pub(crate) enum SerializationError {
     CollectionName,
 }
 
-pub fn insert_payload(
+pub(crate) fn insert_payload(
     exchange: CapturedExchange,
     collection: CollectionConfig,
 ) -> Result<InsertPayload, SerializationError> {
